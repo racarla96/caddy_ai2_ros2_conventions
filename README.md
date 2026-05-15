@@ -1,693 +1,244 @@
 # Caddy AI2 ROS2 Conventions
 
+> **Language policy:** All READMEs, commit messages, and code comments are written in **English**.
+
+---
+
 ## Objective
 
-This document defines the repository organization and development workflow used for ROS 2 projects.
+Define the repository organization and development workflow used across all Caddy AI2 ROS 2 packages.
 
-The main idea is to clearly separate:
+The core principle is a clear, enforced separation between:
 
-- Stable and reusable production code
-- Development and testing utilities
-- Experimental and feature development work
-
-This approach helps achieve:
-
-- Clean and deployable stable branches
-- Reduced contamination from experimental tooling
-- Easier continuous integration
-- Better maintainability
-- Improved collaboration in robotics teams
+- Production-ready code deployable on the real robot
+- Development, testing, and simulation utilities
 
 ---
 
-# Philosophy
+## Branch Strategy
 
-The workflow is based on a model composed of:
-
-- Stable branch
-- Development/Staging branch
-- Feature branches
-- Progressive promotion workflow
-
-Code evolves progressively from experimentation to validated production-ready software.
-
----
-
-# Branch Structure
-
-## Stable branch
-
-```text
-jazzy
-````
-
-This branch contains only the minimum required components to use the package.
-
-### Must include
-
-* Stable and validated code
-* ROS 2 nodes
-* Minimal required configuration
-* Essential launch files
-* Public interfaces
-* Strictly necessary dependencies
-
-### Must not include
-
-* ROS bag files
-* Temporary scripts
-* Benchmarking tools
-* Experimental configuration
-* Debug visualization
-* Heavy simulation assets not required for deployment
-
-### Purpose
-
-This branch should always remain:
-
-* Reproducible
-* Clean
-* Portable
-* Deployable on real robots
-* Easy to reuse by other packages
-
----
-
-## Development branch
-
-```text
-jazzy-dev
+```
+feat/* ──► jazzy-dev ──► jazzy (selective)
 ```
 
-This is the active integration and development branch.
+### `jazzy` — Stable / Production
 
-All new functionality is validated here before being promoted to stable.
+The minimum required to build, install, and run the package on the real robot.
 
-### May include
+**Must include:**
+- Source code and headers
+- Strictly necessary configuration (`config/`)
+- Plugin description files
+- `package.xml` with all dependencies declared
+- `CMakeLists.txt` referencing only production targets
+- `README.md`
 
-* Testing launch files
-* Extended configuration
-* Debugging utilities
-* Helper scripts
-* Benchmarking tools
-* ROS bags
-* RViz visualization
-* Experimental configuration
-* Simulation assets
-* Calibration tools
+**Must NOT include:**
+- Test or simulation launch files
+- RViz configurations
+- Simulation worlds
+- Documentation PDFs or unofficial SDK archives
+- Mesh formats beyond STL (PLY, STEP, ZIP archives)
+- Benchmarking or debugging scripts
+- `ARCHITECTURE.md` or design notes
+- ROS bag files
 
-### Purpose
+### `jazzy-dev` — Development / Staging
 
-Acts as:
+Contains everything in `jazzy` plus development utilities.
 
-* Integration branch
-* Staging branch
-* Controlled sandbox
+**May additionally include:**
+- Launch files for testing and visualization (`bringup/launch/`, `bringup/rviz/`)
+- Extended or experimental configuration
+- Simulation worlds (`description/world.sdf.j2`)
+- All mesh formats (PLY, STEP, ZIP)
+- Reference documentation (`docs/`, `docs_official/`)
+- Design documents (`ARCHITECTURE.md`)
+- Calibration and debug scripts
+- ROS bag files
 
-This is the primary R&D environment.
+### `feat/*` — Feature Branches
 
----
+Always branched from `jazzy-dev`. Merged back into `jazzy-dev` after validation.
 
-## Feature branches
+Naming:
 
-```text
-feat/new-feature
-feat/navigation-refactor
-feat/new-controller
+```
+feat/feature-name
+fix/fix-name
+refactor/name
+experiment/name
 ```
 
-New functionality is developed in isolated branches.
-
-### Rules
-
-* Always created from `jazzy-dev`
-* Integrated first into `jazzy-dev`
-* Promoted to `jazzy` only after validation
-
 ---
 
-# Workflow
+## Promotion Workflow
 
-## 1. Create a new feature branch
+### Development to stable
+
+Promotion from `jazzy-dev` to `jazzy` is **selective**, not a blanket merge.
+
+Some files in `jazzy-dev` (docs, simulation worlds, bringup) are permanently dev-only and must never enter `jazzy`.
+
+Use cherry-pick or selective staging:
+
+```bash
+# Option A — cherry-pick a specific commit
+git checkout jazzy
+git cherry-pick <commit-hash>
+
+# Option B — selectively stage files
+git checkout jazzy
+git checkout jazzy-dev -- src/ config/ include/
+git add CMakeLists.txt package.xml
+git commit
+```
+
+### New feature to development
 
 ```bash
 git checkout jazzy-dev
 git pull
-
 git checkout -b feat/new-feature
-```
 
----
+# ... develop and test ...
 
-## 2. Development phase
-
-This phase allows:
-
-* Experimentation
-* Testing
-* Refactoring
-* Rapid prototyping
-
----
-
-## 3. Integrate into development
-
-Once validated:
-
-```bash
 git checkout jazzy-dev
 git merge feat/new-feature
 ```
 
-At this stage:
-
-* Integration tests
-* Simulation
-* Functional validation
-* Benchmarking
-
-are performed.
-
 ---
 
-## 4. Promote to stable
+## Directory Structure
 
-When functionality is considered stable:
+### ROS 2 controller plugin (chainable controller, hardware interface)
 
-```bash
-git checkout jazzy
-git merge jazzy-dev
+```
+<package>/
+├── include/<package>/       # C++ headers
+├── src/                     # C++ implementation + parameters YAML
+│   ├── <node>.cpp
+│   └── <node>_parameters.yaml
+├── config/                  # Production parameters
+├── plugin_description.xml
+├── CMakeLists.txt
+├── package.xml
+└── README.md
 ```
 
-This promotion process should remain controlled and intentional.
-
----
-
-# Promotion Philosophy
-
-The complete workflow is:
-
-```text
-feat/* -> jazzy-dev -> jazzy
+`jazzy-dev` adds:
+```
+├── launch/                  # Test launch files
 ```
 
-This implements:
+### Sensor / hardware driver package
 
-* A promotion workflow
-* An integration-first workflow
-
-Not everything present in `jazzy-dev` should automatically reach `jazzy`.
-
----
-
-# Recommended Repository Organization
-
-## Configuration
-
-Separate development and production configuration:
-
-```text
-config/
-├── dev/
-└── prod/
+```
+<package>/
+├── code/src/                # C++ implementation
+├── config/                  # Production sensor parameters
+├── description/
+│   ├── sensor.sdf.j2        # Injectable SDF fragment (Jinja2)
+│   └── meshes/
+│       └── sensor.stl       # STL only
+├── sdk/                     # Bundled third-party SDK (if required)
+├── startup/                 # Hardware init scripts (udev rules, port aliases)
+├── plugin_description.xml   # If ros2_control plugin
+├── CMakeLists.txt
+├── package.xml
+└── README.md
 ```
 
----
-
-## Launch files
-
-```text
-launch/
-├── dev/
-└── prod/
+`jazzy-dev` adds:
+```
+├── ARCHITECTURE.md
+├── bringup/
+│   ├── launch/
+│   └── rviz/
+├── description/
+│   ├── world.sdf.j2         # Test world
+│   └── meshes/
+│       ├── sensor.ply
+│       └── sensor.zip
+├── docs/                    # Reference papers / notes
+└── docs_official/           # Manufacturer documentation
 ```
 
 ---
 
-## Scripts
+## `description/` Folder Convention
 
-```text
-scripts/
-├── debug/
-├── calibration/
-└── tools/
+Used for sensor and robot description assets. Kept in both branches unless noted.
+
+| Path | jazzy | jazzy-dev |
+|---|---|---|
+| `description/sensor.sdf.j2` | ✓ | ✓ |
+| `description/world.sdf.j2` | — | ✓ |
+| `description/meshes/*.stl` | ✓ | ✓ |
+| `description/meshes/*.ply`, `*.zip` | — | ✓ |
+
+SDF files use Jinja2 templating (`.sdf.j2`) to allow injection into larger robot descriptions.
+
+---
+
+## `package.xml` Requirements
+
+Every package in `jazzy` must have a complete `package.xml`:
+
+```xml
+<package format="3">
+  <name>package_name</name>
+  <version>0.0.0</version>
+  <description>One-line description of what the package does.</description>
+  <maintainer email="racarla96@gmail.com">racarla96</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- List every package used in CMakeLists.txt -->
+  <depend>rclcpp</depend>
+  ...
+</package>
 ```
 
----
-
-# Advantages
-
-## 1. Clean stable branch
-
-End users receive only what is strictly required.
+Rules:
+- `<description>` must be filled in (not `TODO`)
+- `<license>` must be declared (`Apache-2.0` unless otherwise required)
+- Every `find_package()` call in `CMakeLists.txt` must have a corresponding `<depend>` (or `<build_depend>` / `<buildtool_depend>` as appropriate)
+- Remove any dependency listed in `CMakeLists.txt` but not actually used in code
 
 ---
 
-## 2. Better maintainability
+## `README.md` Requirements
 
-Avoids mixing:
+Every package must have a README with at least:
 
-* production
-* simulation
-* debugging
-* experimentation
-
-inside the same deployment branch.
-
----
-
-## 3. Scalability
-
-This model scales well for projects involving:
-
-* multiple robots
-* simulation
-* real hardware
-* CI/CD
-* perception
-* navigation
-* control systems
+1. **One-line description** — what the package does and why it exists
+2. **Kinematics / algorithm** — if the package implements a non-trivial computation, document it (equations, diagrams)
+3. **Controller chain / architecture** — how this package connects to upstream and downstream components
+4. **Parameters table** — name, type, constraints, description for every parameter
+5. **Example configuration** — a minimal working YAML snippet
+6. **Build instructions**
 
 ---
 
-## 4. Safer integration
+## ROS 2 Overlay Recommendation
 
-New functionality passes through an intermediate validation stage before reaching stable deployment.
+Pair this branch strategy with ROS 2 overlay workspaces:
 
----
-
-# Recommended Naming Conventions
-
-## Features
-
-```text
-feat/feature-name
+```
+underlay workspace  →  jazzy   (stable, always sourced)
+overlay  workspace  →  jazzy-dev / feat/*  (experimental)
 ```
 
-## Fixes
-
-```text
-fix/fix-name
-```
-
-## Experiments
-
-```text
-experiment/name
-```
-
-## Refactors
-
-```text
-refactor/name
-```
+This allows switching between stable and experimental without rebuilding everything.
 
 ---
 
-# Additional Recommendations
-
-## Keep `jazzy` minimal
-
-The cleaner the stable branch remains:
-
-* the easier deployment becomes
-* the easier reuse becomes
-* the fewer unnecessary dependencies are introduced
-
----
-
-## Use ROS 2 overlays
-
-This strategy works especially well when combined with overlay workspaces:
-
-```text
-underlay -> stable
-overlay  -> experimental
-```
-
----
-
-# Summary
-
-This repository uses a branching strategy based on:
-
-* Stable branches
-* Development branches
-* Feature branches
-* Progressive promotion workflows
-
-to maintain:
-
-* stability
-* maintainability
-* modularity
-* experimentation capability
-
-without compromising production-ready software quality.
-
-## NOTA:
-
-Por defecto, la documentación de los READMEs será en inglés.
-
-## Objetivo
-
-Este documento define la estrategia de organización y desarrollo utilizada en los repositorios de proyectos ROS 2.
-
-La idea principal es separar claramente:
-
-- Código estable y reutilizable
-- Herramientas de desarrollo y testing
-- Desarrollo de nuevas funcionalidades
-
-De esta forma se consigue:
-
-- Mantener una rama limpia y desplegable
-- Evitar contaminación de herramientas experimentales
-- Facilitar integración continua
-- Simplificar validación y mantenimiento
-- Mejorar colaboración en equipos de robótica
-
----
-
-# Filosofía
-
-El flujo de trabajo se basa en un modelo de:
-
-- Stable branch
-- Development/Staging branch
-- Feature branches
-- Progressive promotion workflow
-
-Esto significa que el código evoluciona progresivamente desde desarrollo experimental hasta código estable.
-
----
-
-# Estructura de ramas
-
-## Rama estable
-
-```text
-jazzy
-````
-
-Contiene únicamente lo mínimo imprescindible para utilizar el paquete.
-
-### Debe incluir
-
-* Código funcional y validado
-* Nodos ROS 2 estables
-* Configuración mínima necesaria
-* Launch files esenciales
-* Interfaces públicas
-* Dependencias estrictamente necesarias
-
-### No debe incluir
-
-* Bags de prueba
-* Scripts temporales
-* Herramientas de benchmarking
-* Configuración experimental
-* Visualización de debugging
-* Assets pesados de simulación innecesarios
-
-### Objetivo
-
-Esta rama debe ser:
-
-* Reproducible
-* Limpia
-* Portable
-* Desplegable en robots reales
-* Fácil de reutilizar por otros paquetes
-
----
-
-## Rama de desarrollo
-
-```text
-jazzy-dev
-```
-
-Es la rama de integración y desarrollo activo.
-
-Aquí se valida el trabajo antes de promocionarlo a estable.
-
-### Puede incluir
-
-* Launch files de testing
-* Configuración extendida
-* Herramientas de debugging
-* Scripts auxiliares
-* Benchmarking
-* Bags ROS
-* Visualización RViz
-* Configuración experimental
-* Simulación
-* Herramientas de calibración
-
-### Objetivo
-
-Actúa como:
-
-* Integration branch
-* Staging branch
-* Sandbox controlado
-
-Es el entorno principal de I+D.
-
----
-
-## Ramas feature
-
-```text
-feat/nueva-feature
-feat/navigation-refactor
-feat/new-controller
-```
-
-Las nuevas funcionalidades se desarrollan en ramas independientes.
-
-### Reglas
-
-* Siempre nacen desde `jazzy-dev`
-* Se integran primero en `jazzy-dev`
-* Solo pasan a `jazzy` cuando están validadas
-
----
-
-# Flujo de trabajo
-
-## 1. Crear nueva feature
-
-```bash
-git checkout jazzy-dev
-git pull
-
-git checkout -b feat/nueva-feature
-```
-
----
-
-## 2. Desarrollar
-
-Durante esta fase se permite:
-
-* Experimentación
-* Testing
-* Refactors
-* Pruebas rápidas
-
----
-
-## 3. Integrar en desarrollo
-
-Una vez validada:
-
-```bash
-git checkout jazzy-dev
-git merge feat/nueva-feature
-```
-
-Aquí se realizan:
-
-* Tests de integración
-* Simulación
-* Validación funcional
-* Benchmarks
-
----
-
-## 4. Promoción a estable
-
-Cuando la funcionalidad es suficientemente estable:
-
-```bash
-git checkout jazzy
-git merge jazzy-dev
-```
-
-Esta promoción debe ser controlada.
-
----
-
-# Filosofía de promoción
-
-El flujo completo es:
-
-```text
-feat/* -> jazzy-dev -> jazzy
-```
-
-Esto implementa un:
-
-* Promotion workflow
-* Integration-first workflow
-
-No todo lo que existe en `jazzy-dev` debe promocionarse automáticamente a `jazzy`.
-
----
-
-# Organización recomendada
-
-## Configuración
-
-Separar configuración de desarrollo y producción:
-
-```text
-config/
-├── dev/
-└── prod/
-```
-
----
-
-## Launch files
-
-```text
-launch/
-├── dev/
-└── prod/
-```
-
----
-
-## Scripts
-
-```text
-scripts/
-├── debug/
-├── calibration/
-└── tools/
-```
-
----
-
-# Ventajas
-
-## 1. Rama estable limpia
-
-El usuario final obtiene únicamente lo necesario.
-
----
-
-## 2. Mejor mantenibilidad
-
-Se evita mezclar:
-
-* producción
-* simulación
-* debugging
-* experimentación
-
----
-
-## 3. Escalabilidad
-
-Este modelo escala bien en proyectos con:
-
-* múltiples robots
-* simulación
-* hardware real
-* CI/CD
-* percepción
-* navegación
-* control
-
----
-
-## 4. Integración segura
-
-Las nuevas funcionalidades pasan por una fase intermedia antes de llegar a estable.
-
----
-
-# Convenciones recomendadas
-
-## Features
-
-```text
-feat/nombre-feature
-```
-
-## Fixes
-
-```text
-fix/nombre-fix
-```
-
-## Experimentos
-
-```text
-experiment/nombre
-```
-
-## Refactors
-
-```text
-refactor/nombre
-```
-
----
-
-# Recomendaciones adicionales
-
-## Mantener `jazzy` minimalista
-
-Cuanto más limpia sea la rama estable:
-
-* más fácil será desplegar
-* más fácil será reutilizar
-* menos dependencias innecesarias existirán
-
----
-
-## Usar overlays de ROS 2
-
-Muy recomendable combinar esta estrategia con workspaces overlay:
-
-```text
-underlay -> estable
-overlay  -> experimental
-```
-
----
-
-# Resumen
-
-Este repositorio utiliza una estrategia de branching basada en:
-
-* Stable branch
-* Development branch
-* Feature branches
-* Progressive promotion workflow
-
-Con el objetivo de mantener:
-
-* estabilidad
-* mantenibilidad
-* modularidad
-* capacidad de experimentación
-
-sin comprometer el código de producción.
-
-
+## Summary
+
+| Branch | Purpose | Deployable on robot |
+|---|---|---|
+| `jazzy` | Stable, minimal, clean | Yes |
+| `jazzy-dev` | Integration, staging, R&D | With caution |
+| `feat/*` | Isolated feature development | No |

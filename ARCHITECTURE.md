@@ -78,20 +78,25 @@ graph TD
     %% Package dependencies (dashed)
     %% ═══════════════════════════════════════════════════════════
 
+    %% Sensors feed data downward into the system
+    SBG  -. "IMU data" .-> ROBOT
+    NAVSAT -. "NavSat fix" .-> ROBOT
+    SICK -. "LaserScan" .-> ROBOT
+    SICK -. "LaserScan" .-> SIM
+    YDLIDAR -. "LaserScan" .-> ROBOT
+    YDLIDAR -. "LaserScan" .-> GZ
+
     %% Real robot bringup
     ROBOT -.-> DESC
     ROBOT -.-> BSC
     ROBOT -.-> SA & TA
     ROBOT -.-> SD & TD
-    ROBOT -.-> SBG & SICK & YDLIDAR & NAVSAT
 
     %% Simulation bringup
     SIM -.-> DESC
     SIM -.-> SA & TA
     SIM -.-> GZ & MVSIM
-    SIM -.-> SICK
     GGT -.-> SIM
-    GZ -.-> YDLIDAR
 
     %% Shared
     DESC -.-> RDP

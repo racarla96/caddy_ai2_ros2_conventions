@@ -76,6 +76,11 @@ Varios `package.xml` tienen campos genéricos sin rellenar.
 - [ ] Verificar el signo del valor RPM en `src/traction_driver.cpp` (TODO en el código)
 - [ ] Actualizar referencia del script en README: `asignar_can_motor_drv.sh` → `setup_can_trac_drv.sh` (se renombró)
 - [ ] Añadir parámetro `prefix` al macro `system_traction_ros2_control` en `system_traction.ros2_control.xacro` para soporte multi-robot (actualmente `system_traction_joint` está hardcodeado sin prefijo)
+- [ ] Implementar parámetros de temporización en el driver C++ (`src/traction_driver.cpp`) y exponerlos en el bloque `<ros2_control>` del SDF, igual que el driver de steering:
+  - `controller_manager_frequency_hz` (sustituye a `update_rate`)
+  - `hardware_sample_frequency_hz`
+  - `read_multiplicity`, `write_multiplicity`, `read_offset`, `write_offset`
+  - Referencia: `caddy_ai2_model.sdf.j2` líneas 374–393 (bloque `steering_system`)
 
 ---
 

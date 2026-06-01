@@ -260,3 +260,103 @@ El mesh STL del chassis tiene un origen y orientación propios que no coinciden 
 - [ ] Añadir diagrama de topics y nodos (generado con `rqt_graph`) al README de `_sim`
 - [ ] Documentar diferencias de comportamiento entre Gazebo y MVSim para este modelo
 - [ ] Añadir instrucciones para crear mundos personalizados en `_sim`
+
+---
+
+## 11. Migración SDF → URDF (refactoring en curso)
+
+Estado de la migración arquitectural en `caddy_ai2_ros2_robot`:
+
+| Elemento | Estado |
+|---|---|
+| `caddy_ai2_model.urdf.j2` creado en `caddy_ai2_ros2_description` | ✓ Hecho |
+| `display.launch.py` migrado a URDF | ✓ Hecho |
+| `caddy_ai2_model.sdf.j2` movido a `caddy_ai2_ros2_gazebo_simulation` | ✓ Hecho |
+| `caddy_ai2_ros2_description` reorganizado (`bringup/`, `description/model/`) | ✓ Hecho |
+| `caddy_ai2_ros2_robot` reorganizado con `bringup/` | Pendiente |
+| `description/ros2_control.urdf.j2` en `caddy_ai2_ros2_robot` | Pendiente |
+| `robot.launch.py` migrado de SDF a URDF | Pendiente |
+
+### T1 — Reorganizar `caddy_ai2_ros2_robot`
+
+Mover `config/` y `launch/` dentro de `bringup/` para ser consistente con el resto de paquetes.
+
+**Estructura objetivo:**
+
+```
+caddy_ai2_ros2_robot/
+├── bringup/
+│   ├── config/
+│   │   └── controllers.yaml.j2     ← desde config/
+│   └── launch/
+│       └── robot.launch.py         ← desde launch/
+└── description/
+    └── ros2_control.urdf.j2        ← nuevo
+```
+
+### T2 — Crear `caddy_ai2_ros2_robot/description/ros2_control.urdf.j2`
+
+Extraer los bloques `<ros2_control>` que actualmente están en el SDF y convertirlos a fragmento URDF inyectable en tiempo de launch.
+
+**Contenido esperado:** los dos bloques de hardware real (steering + traction) actualmente en `caddy_ai2_ros2_description/description/sdf/caddy_ai2_model.sdf.j2` líneas 374–414, adaptados a formato URDF.
+
+```xml
+<ros2_control name="steering_system" type="system">
+  <hardware>
+    <plugin>caddy_ai2_ros2_control_system_steering_driver/SystemSteeringHardware</plugin>
+    ...
+  </hardware>
+  <joint name="{{ prefix }}steering_joint">...</joint>
+</ros2_control>
+
+<ros2_control name="system_traction" type="actuator">
+  <hardware>
+    <plugin>caddy_ai2_ros2_control_system_traction_driver/SystemTractionHardwareInterface</plugin>
+    ...
+  </hardware>
+  <joint name="{{ prefix }}system_traction_joint">...</joint>
+</ros2_control>
+```
+
+### T3 — Migrar `robot.launch.py` de SDF a URDF
+
+Reemplazar la lógica de `_launch_robot` en `caddy_ai2_ros2_robot/launch/robot.launch.py`:
+
+**Actual (SDF):**
+1. Renderiza `caddy_ai2_model.sdf.j2` con `simulation=False`
+2. Extrae `<ros2_control>` con `_sdf_ros2_control_to_urdf()` → URDF mínimo para `ros2_control_node`
+3. Pasa el SDF a `robot_state_publisher`
+
+**Objetivo (URDF):**
+1. Renderiza `caddy_ai2_model.urdf.j2` (URDF puro)
+2. Renderiza `ros2_control.urdf.j2` (bloques hardware)
+3. Inyecta el fragmento dentro del `<robot>` tag → URDF completo
+4. Pasa el URDF completo tanto a `robot_state_publisher` como a `ros2_control_node`
+5. Eliminar la función `_sdf_ros2_control_to_urdf()`
+
+### T4 — Extraer parámetros de timing del driver a `robot_params.yaml`
+
+Parámetros hardcodeados en el SDF que deberían venir de `robot_params.yaml`:
+
+```yaml
+steering_driver:
+  hardware_sample_frequency_hz: 500
+  read_multiplicity: 1
+  write_multiplicity: 10
+  read_offset: 0
+  write_offset: 1
+
+traction_driver:
+  hardware_sample_frequency_hz: 500
+```
+
+### T5 — Inyectar `<ros2_control>` desde los paquetes de drivers (largo plazo)
+
+Los bloques `<ros2_control>` de steering y traction están definidos en `caddy_ai2_ros2_robot`, pero idealmente cada driver debería ser su propio fragmento inyectable — igual que los sensores.
+
+**Pasos:**
+1. Añadir `description/hardware.urdf.j2` a `caddy_ai2_ros2_control_system_steering_driver`
+2. Añadir `description/hardware.urdf.j2` a `caddy_ai2_ros2_control_system_traction_driver`
+3. `robot.launch.py` renderiza y ensambla los fragmentos en lugar de tener el `ros2_control.urdf.j2` monolítico en `caddy_ai2_ros2_robot`
+
+**Dependencia:** completar T2 y T3 primero.

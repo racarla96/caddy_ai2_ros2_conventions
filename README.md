@@ -235,6 +235,12 @@ This allows switching between stable and experimental without rebuilding everyth
 
 ---
 
+## VS Code
+
+Recommended extensions and workspace settings are documented in [vscode.md](vscode.md) and bundled in the `.vscode/` folder of this package.
+
+---
+
 ## Summary
 
 | Branch | Purpose | Deployable on robot |

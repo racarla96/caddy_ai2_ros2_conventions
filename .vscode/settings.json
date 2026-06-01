@@ -1,0 +1,9 @@
+{
+    "cmake.ignoreCMakeListsMissing": true,
+    "files.associations": {
+        "*.urdf.j2": "jinja-xml",
+        "*.sdf.j2": "jinja-xml",
+        "*.sdf.xacro": "xml",
+        "*.yaml.j2": "jinja-yaml"
+    }
+}
